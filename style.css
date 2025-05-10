@@ -1,0 +1,221 @@
+body {
+    font-family: 'Space Mono', monospace;
+    background-color: #2e2e2e; /* Dark gray background */
+    color: #cccccc; /* Light gray text */
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden; /* Prevent scrollbars from body */
+}
+
+.container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    max-width: 100%;
+    max-height: 100%;
+    background-color: #3a3a3a; /* Slightly lighter dark gray for container */
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+.sidebar {
+    width: 250px;
+    background-color: #252525; /* Even darker gray for sidebars */
+    padding: 15px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.sidebar:first-child {
+    border-right: 1px solid #444444;
+}
+
+.sidebar:last-child {
+    border-left: 1px solid #444444;
+}
+
+.panel-header {
+    border-bottom: 1px solid #444444;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.panel-header h2 {
+    margin: 0;
+    font-size: 1.2em;
+    text-align: center;
+}
+
+#map-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-grow: 1;
+}
+
+#map-list li {
+    background-color: #4a4a4a;
+    color: #dddddd;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 8px; /* Rounded corners like in screenshot */
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.2s;
+}
+
+#map-list li.active {
+    background-color: #6a6a6a; /* Slightly lighter for active map */
+    font-weight: bold;
+}
+
+#map-list li:hover {
+    background-color: #5a5a5a;
+}
+
+.add-button,
+#export-map-btn {
+    background-color: #505050;
+    color: #cccccc;
+    border: 1px solid #606060;
+    padding: 10px;
+    font-size: 1.5em; /* Larger plus */
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    margin-top: 10px;
+    font-family: 'Space Mono', monospace;
+}
+#export-map-btn {
+    font-size: 1em; /* Normal size for export button */
+}
+
+.add-button:hover,
+#export-map-btn:hover {
+    background-color: #606060;
+}
+
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative; /* For canvas positioning */
+    overflow: hidden; /* Important for canvas panning/zooming if implemented */
+    background-color: #333333; /* Darker for the map area */
+}
+
+#hexagon-canvas {
+    /* Dimensions will be set in JS */
+    background-color: transparent; /* Or a specific grid background */
+}
+
+#no-map-selected-placeholder,
+#no-hex-selected-placeholder {
+    color: #777777;
+    text-align: center;
+    padding: 20px;
+}
+
+
+#settings-fields label {
+    display: block;
+    margin-top: 10px;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+
+#settings-fields input[type="text"],
+#settings-fields input[type="number"],
+#settings-fields textarea {
+    width: calc(100% - 12px); /* Account for padding */
+    padding: 8px;
+    background-color: #404040;
+    border: 1px solid #505050;
+    color: #cccccc;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    box-sizing: border-box;
+}
+
+#settings-fields input[type="checkbox"] {
+    margin-right: 5px;
+    vertical-align: middle;
+}
+#settings-fields .checkbox-label {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Полупрозрачный фон */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Поверх всего остального */
+    backdrop-filter: blur(5px); /* Эффект блюра */
+    -webkit-backdrop-filter: blur(5px); /* Для Safari */
+}
+
+.modal-content {
+    background-color: #2e2e2e; /* Тот же фон, что и у body, или чуть светлее/темнее */
+    padding: 30px;
+    border-radius: 8px;
+    border: 1px solid #444444;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    text-align: center;
+    width: 350px;
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.4em;
+    color: #cccccc;
+}
+
+.modal-content input[type="text"] {
+    width: calc(100% - 22px); /* Учитываем padding и border инпута */
+    padding: 10px;
+    margin-bottom: 20px;
+    background-color: #404040;
+    border: 1px solid #505050;
+    color: #cccccc;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+
+.modal-content button {
+    background-color: #505050;
+    color: #cccccc;
+    border: 1px solid #606060;
+    padding: 10px 20px;
+    font-size: 1em;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    margin: 5px;
+    transition: background-color 0.2s;
+}
+
+.modal-content button:hover {
+    background-color: #606060;
+}
+
+.modal-content button.cancel-button {
+    background-color: #404040; /* Немного другой цвет для кнопки отмены */
+}
+.modal-content button.cancel-button:hover {
+    background-color: #505050;
+}

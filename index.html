@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagon Map Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar" id="map-list-panel">
+            <div class="panel-header">
+                <h2>Hexagon maps</h2>
+            </div>
+            <ul id="map-list">
+                <!-- Кнопки карт будут добавлены здесь -->
+            </ul>
+            <button id="add-map-btn" class="add-button">+</button>
+        </div>
+
+        <div class="main-content" id="grid-container">
+            <canvas id="hexagon-canvas"></canvas>
+            <div id="no-map-selected-placeholder">
+                <p>Choose map or create.</p>
+            </div>
+        </div>
+
+        <div class="sidebar" id="settings-panel">
+            <div class="panel-header">
+                <h2>Settings</h2>
+            </div>
+            <div id="settings-fields">
+                <p id="no-hex-selected-placeholder">Choose hexagon to edit properties.</p>
+                <!-- Поля настроек будут добавлены здесь динамически -->
+            </div>
+            <button id="export-map-btn" style="display: none;">Export map</button>
+        </div>
+    </div>
+
+        <!-- Модальное окно для создания карты -->
+    <div id="create-map-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Создать новую карту</h2>
+            <input type="text" id="new-map-name-input" placeholder="Название карты">
+            <button id="confirm-create-map-btn">Создать</button>
+            <button id="cancel-create-map-btn" class="cancel-button">Отмена</button>
+        </div>
+    </div>
+
+    <!-- ... другие скрипты ... -->
+    <script src="HexMath.js"></script>
+    <script src="settingsSchema.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
