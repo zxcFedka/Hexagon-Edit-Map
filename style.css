@@ -219,3 +219,53 @@ body {
 .modal-content button.cancel-button:hover {
     background-color: #505050;
 }
+
+#map-list li {
+    background-color: #4a4a4a;
+    color: #dddddd;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 8px; /* Rounded corners like in screenshot */
+    cursor: pointer;
+    text-align: center; /* Можно оставить или убрать, если текст будет слева */
+    transition: background-color 0.2s;
+    position: relative; /* Важно для позиционирования дочерних элементов */
+    display: flex; /* Используем flex для удобного расположения имени и иконок */
+    justify-content: space-between; /* Имя слева, иконки справа */
+    align-items: center; /* Вертикальное выравнивание по центру */
+}
+
+#map-list li .map-name-text {
+    flex-grow: 1; /* Занимает доступное пространство */
+    text-align: left; /* Выравнивание имени карты по левому краю */
+    padding-left: 5px; /* Небольшой отступ для имени */
+}
+
+#map-list li .map-item-actions {
+    display: none; /* Скрываем иконки по умолчанию */
+    align-items: center; /* Выравниваем иконки по центру, если их несколько */
+    gap: 8px; /* Пространство между иконками */
+    padding-right: 5px; /* Небольшой отступ для иконок */
+}
+
+#map-list li:hover .map-item-actions {
+    display: flex; /* Показываем иконки при наведении на li */
+}
+
+.map-item-actions span {
+    cursor: pointer;
+    font-size: 0.9em; /* Можешь настроить размер */
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+.map-item-actions span:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.delete-map-icon {
+    color: #bc6a6a; /* Твой цвет для иконки удаления */
+}
+.download-map-icon {
+    color: #88c0d0; /* Пример цвета для скачивания, можешь выбрать другой */
+}

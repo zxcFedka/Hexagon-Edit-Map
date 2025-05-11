@@ -135,7 +135,154 @@ document.addEventListener('DOMContentLoaded', () => {
     function startLabelAnimation(hexKey) { if (activeLabel.animationId) cancelAnimationFrame(activeLabel.animationId); if (!currentMapName || !maps[currentMapName] || !maps[currentMapName].hexes[hexKey]) return; const hexData = maps[currentMapName].hexes[hexKey]; activeLabel.hexKey = hexKey; activeLabel.targetTitle = hexData.properties.Title || `Hex_${hexData.Q}_${hexData.R}`; activeLabel.lineProgress = 0; activeLabel.textScrambleProgress = 0; activeLabel.displayText = ""; activeLabel.lineStartTimestamp = performance.now(); activeLabel.textStartTimestamp = 0; activeLabel.animationId = requestAnimationFrame(animateLabel); }
     function clearLabelAnimation() { if (activeLabel.animationId) cancelAnimationFrame(activeLabel.animationId); const needsRedraw = activeLabel.hexKey !== null; activeLabel.hexKey = null; activeLabel.animationId = null; if (needsRedraw && !opacityAnimationId) renderCurrentMap(); }
     function animateLabel(timestamp) { if (!activeLabel.hexKey || !currentMapName || !maps[currentMapName].hexes[activeLabel.hexKey]) { clearLabelAnimation(); return; } let needsAnotherFrame = false; if (activeLabel.lineProgress < 1) { const elapsedLine = timestamp - activeLabel.lineStartTimestamp; activeLabel.lineProgress = Math.min(1, elapsedLine / LABEL_LINE_DURATION); needsAnotherFrame = true; } if (activeLabel.lineProgress === 1) { if (activeLabel.textStartTimestamp === 0) activeLabel.textStartTimestamp = timestamp; const elapsedText = timestamp - activeLabel.textStartTimestamp; activeLabel.textScrambleProgress = Math.min(1, elapsedText / LABEL_TEXT_REVEAL_DURATION); if (activeLabel.textScrambleProgress < 1) { let newText = ""; const revealUpTo = Math.floor(activeLabel.targetTitle.length * activeLabel.textScrambleProgress); for(let i=0; i< activeLabel.targetTitle.length; i++) { if (i <= revealUpTo) newText += activeLabel.targetTitle[i]; else if (i < revealUpTo + LABEL_TEXT_SCRAMBLE_CHARS_PER_FRAME) newText += getRandomChar(); else newText += " "; } activeLabel.displayText = newText.trimEnd(); needsAnotherFrame = true; } else activeLabel.displayText = activeLabel.targetTitle; } if (!opacityAnimationId) renderCurrentMap(); if (needsAnotherFrame) activeLabel.animationId = requestAnimationFrame(animateLabel); else activeLabel.animationId = null; }
-    function renderMapList() { mapListUI.innerHTML = ''; Object.keys(maps).forEach(name => { const li = document.createElement('li'); li.textContent = name; li.dataset.mapName = name; if (name === currentMapName) li.classList.add('active'); li.addEventListener('click', () => selectMap(name)); mapListUI.appendChild(li); }); }
+    
+    function renderMapList() {
+        mapListUI.innerHTML = '';
+        Object.keys(maps).forEach(name => {
+            const li = document.createElement('li');
+            li.dataset.mapName = name;
+
+            // Элемент для имени карты
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'map-name-text';
+            nameSpan.textContent = name;
+            li.appendChild(nameSpan);
+
+            // Контейнер для иконок действий
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'map-item-actions';
+
+            // Иконка скачивания
+            const downloadIcon = document.createElement('span');
+            downloadIcon.className = 'download-map-icon';
+            downloadIcon.textContent = '💾'; // Unicode символ дискеты (или ↓, или SVG)
+            downloadIcon.title = 'Download this map';
+            downloadIcon.addEventListener('click', (e) => {
+                e.stopPropagation(); // Предотвращаем срабатывание клика по li (выбор карты)
+                handleDownloadSpecificMap(name);
+            });
+            actionsDiv.appendChild(downloadIcon);
+
+            // Иконка удаления
+            const deleteIcon = document.createElement('span');
+            deleteIcon.className = 'delete-map-icon';
+            deleteIcon.textContent = '🗑️'; // Unicode символ корзины (или X, или SVG)
+            deleteIcon.title = 'Delete this map';
+            deleteIcon.addEventListener('click', (e) => {
+                e.stopPropagation(); // Предотвращаем срабатывание клика по li
+                handleDeleteMap(name);
+            });
+            actionsDiv.appendChild(deleteIcon);
+
+            li.appendChild(actionsDiv);
+
+            if (name === currentMapName) {
+                li.classList.add('active');
+            }
+            // Клик по самому элементу списка (не по иконкам) по-прежнему выбирает карту
+            li.addEventListener('click', (event) => {
+                // Убедимся, что клик был не по иконке, хотя stopPropagation должен это решить
+                if (event.target === li || event.target === nameSpan) {
+                    selectMap(name);
+                }
+            });
+            mapListUI.appendChild(li);
+        });
+    }
+
+    function handleDeleteMap(mapNameToDelete) {
+        if (!maps[mapNameToDelete]) return;
+
+        if (confirm(`Are you sure you want to delete map "${mapNameToDelete}"? This action cannot be undone.`)) {
+            delete maps[mapNameToDelete];
+            console.log(`Map "${mapNameToDelete}" deleted.`);
+
+            if (currentMapName === mapNameToDelete) {
+                // Если удалили текущую карту, выбираем первую из оставшихся или никакую
+                const remainingMapNames = Object.keys(maps);
+                currentMapName = remainingMapNames.length > 0 ? remainingMapNames[0] : null;
+                selectMap(currentMapName); // Обновит UI, очистит холст если карт нет
+            } else {
+                // Если удалили не активную карту, просто перерисовываем список
+                renderMapList(); // Чтобы активный элемент остался прежним
+            }
+            saveMapsToLocalStorage();
+        }
+    }
+
+    function handleDownloadSpecificMap(mapNameToDownload) {
+        const luaString = generateLuaForMap(mapNameToDownload);
+        if (luaString) {
+            downloadLuaFile(luaString, `${mapNameToDownload}.lua`);
+        } else {
+            alert(`Could not export map "${mapNameToDownload}". It might be empty or not found.`);
+        }
+    }
+
+    function generateLuaForMap(mapNameToExport) {
+        if (!maps[mapNameToExport]) {
+            console.error(`Map "${mapNameToExport}" not found for export.`);
+            return null;
+        }
+        const mapData = maps[mapNameToExport];
+        if (Object.keys(mapData.hexes).length === 0) {
+            console.warn(`Map "${mapNameToExport}" contains no hexes to export.`);
+            // Можно вернуть пустую таблицу или null/undefined
+            return "return {}\n";
+        }
+
+        let luaString = "return {\n";
+        const hexEntries = Object.entries(mapData.hexes);
+        const hexToLuaKeyMap = new Map();
+        const usedLuaKeys = new Set();
+
+        hexEntries.forEach(([original_QR_Key, hex]) => {
+            let baseTitle = (hex.properties.Title || "").trim();
+            if (baseTitle === "") baseTitle = `Hex_${hex.Q}_${hex.R}`;
+            let uniqueLuaKey = baseTitle;
+            let counter = 1;
+            while (usedLuaKeys.has(uniqueLuaKey)) {
+                uniqueLuaKey = `${baseTitle}_${counter++}`;
+            }
+            usedLuaKeys.add(uniqueLuaKey);
+            hexToLuaKeyMap.set(original_QR_Key, uniqueLuaKey);
+        });
+
+        hexEntries.forEach(([original_QR_Key, hex], index) => {
+            const uniqueLuaKey = hexToLuaKeyMap.get(original_QR_Key);
+            luaString += `\t["${escapeLuaString(uniqueLuaKey)}"] = {\n`;
+            luaString += `\t\tQ = ${hex.Q},\n`;
+            luaString += `\t\tR = ${hex.R},\n`;
+            settingsSchema.forEach(setting => { // Убедись что settingsSchema доступна здесь
+                if (setting.luaName === "NextHex") return;
+                const value = hex.properties[setting.name];
+                if (value !== undefined) {
+                    if (setting.type === 'string') luaString += `\t\t${setting.luaName} = "${escapeLuaString(String(value))}",\n`;
+                    else if (setting.type === 'number') luaString += `\t\t${setting.luaName} = ${parseFloat(value) || 0},\n`;
+                    else if (setting.type === 'boolean') luaString += `\t\t${setting.luaName} = ${value ? 'true' : 'false'},\n`;
+                }
+            });
+            if (hex.properties.NextHex && hex.properties.NextHex.length > 0) {
+                luaString += `\t\tNextHex = {\n`;
+                hex.properties.NextHex.forEach(targetHex_QR_Key => {
+                    const uniqueLuaKeyOfTarget = hexToLuaKeyMap.get(targetHex_QR_Key);
+                    if (uniqueLuaKeyOfTarget) {
+                        luaString += `\t\t\t"${escapeLuaString(uniqueLuaKeyOfTarget)}",\n`;
+                    } else {
+                        console.warn(`Экспорт для "${uniqueLuaKey}": Не удалось найти Lua-ключ для NextHex соседа с Q,R: "${targetHex_QR_Key}"`);
+                    }
+                });
+                luaString += `\t\t}\n`;
+            } else {
+                luaString += `\t\tNextHex = {}\n`;
+            }
+            luaString = luaString.trimEnd().endsWith(',') ? luaString.slice(0, -1) + "\n" : luaString;
+            luaString += `\t}${index === hexEntries.length - 1 ? '' : ','}\n`;
+        });
+        luaString += "}\n";
+        return luaString;
+    }
+
     function selectMap(mapName) { currentMapName = (mapName && maps[mapName]) ? mapName : null; selectedHexKey = null; linkingHexFromKey = null; mouseHexKey = null; hoveredHexKeyForEffects = null; isCtrlPressed = false; if (isPanning) isPanning = false; cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }; canvas.style.cursor = currentMapName ? 'grab' : 'default'; clearLabelAnimation(); opacityAnimStore = {}; if (opacityAnimationId) {cancelAnimationFrame(opacityAnimationId); opacityAnimationId = null;} if (activeLabel.animationId) {cancelAnimationFrame(activeLabel.animationId); activeLabel.animationId = null;} saveMapsToLocalStorage(); renderMapList(); renderSettingsPanel(); renderCurrentMap(); exportMapBtn.style.display = currentMapName ? 'block' : 'none'; noMapPlaceholder.style.display = currentMapName ? 'none' : 'block'; canvas.style.display = currentMapName ? 'block' : 'none'; }
     function resizeCanvas() { canvas.width = gridContainer.clientWidth; canvas.height = gridContainer.clientHeight; if (currentMapName) { cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }; renderCurrentMap(); } }
     window.addEventListener('resize', resizeCanvas);
@@ -287,41 +434,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     exportMapBtn.addEventListener('click', () => {
-        if (!currentMapName || !maps[currentMapName]) { alert("Карта не выбрана или пуста."); return; }
-        const mapData = maps[currentMapName]; if (Object.keys(mapData.hexes).length === 0) { alert("Текущая карта не содержит гексагонов для экспорта."); return; }
-        let luaString = "return {\n"; const hexEntries = Object.entries(mapData.hexes);
-        const hexToLuaKeyMap = new Map(); const usedLuaKeys = new Set();
-        hexEntries.forEach(([original_QR_Key, hex]) => {
-            let baseTitle = (hex.properties.Title || "").trim(); if (baseTitle === "") baseTitle = `Hex_${hex.Q}_${hex.R}`;
-            let uniqueLuaKey = baseTitle; let counter = 1;
-            while (usedLuaKeys.has(uniqueLuaKey)) uniqueLuaKey = `${baseTitle}_${counter++}`; 
-            usedLuaKeys.add(uniqueLuaKey); hexToLuaKeyMap.set(original_QR_Key, uniqueLuaKey);
-        });
-        hexEntries.forEach(([original_QR_Key, hex], index) => {
-            const uniqueLuaKey = hexToLuaKeyMap.get(original_QR_Key);
-            luaString += `\t["${escapeLuaString(uniqueLuaKey)}"] = {\n`;
-            luaString += `\t\tQ = ${hex.Q},\n`; luaString += `\t\tR = ${hex.R},\n`;
-            settingsSchema.forEach(setting => {
-                if (setting.luaName === "NextHex") return; const value = hex.properties[setting.name];
-                if (value !== undefined) {
-                    if (setting.type === 'string') luaString += `\t\t${setting.luaName} = "${escapeLuaString(String(value))}",\n`;
-                    else if (setting.type === 'number') luaString += `\t\t${setting.luaName} = ${parseFloat(value) || 0},\n`;
-                    else if (setting.type === 'boolean') luaString += `\t\t${setting.luaName} = ${value ? 'true' : 'false'},\n`;
-                }
-            });
-            if (hex.properties.NextHex && hex.properties.NextHex.length > 0) {
-                luaString += `\t\tNextHex = {\n`;
-                hex.properties.NextHex.forEach(targetHex_QR_Key => {
-                    const uniqueLuaKeyOfTarget = hexToLuaKeyMap.get(targetHex_QR_Key); 
-                    if (uniqueLuaKeyOfTarget) luaString += `\t\t\t"${escapeLuaString(uniqueLuaKeyOfTarget)}",\n`;
-                    else console.warn(`Экспорт: Не удалось найти Lua-ключ для NextHex соседа с Q,R: "${targetHex_QR_Key}" из гекса "${uniqueLuaKey}" (Q,R: ${original_QR_Key})`);
-                });
-                luaString += `\t\t}\n`;
-            } else luaString += `\t\tNextHex = {}\n`; 
-            luaString = luaString.trimEnd().endsWith(',') ? luaString.slice(0, -1) + "\n" : luaString;
-            luaString += `\t}${index === hexEntries.length - 1 ? '' : ','}\n`;
-        });
-        luaString += "}\n"; downloadLuaFile(luaString, `${currentMapName}.lua`);
+        if (!currentMapName) {
+            alert("Карта не выбрана.");
+            return;
+        }
+        const luaString = generateLuaForMap(currentMapName);
+        if (luaString) {
+            downloadLuaFile(luaString, `${currentMapName}.lua`);
+        } else {
+            alert(`Could not export map "${currentMapName}". It might be empty or not found.`);
+        }
     });
 
     function getDefaultHexProperties() {
