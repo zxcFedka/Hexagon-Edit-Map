@@ -5,7 +5,8 @@ const settingsSchema = [
     { name: "Cost", type: "number", defaultValue: 0, luaName: "Cost" },
     { name: "visible", type: "boolean", defaultValue: false, luaName: "visible" },
     { name: "Previous Map", type: "boolean", defaultValue: false, luaName: "PreviousMap" },
-    { name: "Next Map", type: "boolean", defaultValue: false, luaName: "NextMap" }
+    { name: "Next Map", type: "boolean", defaultValue: false, luaName: "NextMap" },
+    { name: "Start", type: "boolean", defaultValue: false, luaName: "Start" }
     // NextHex здесь не указываем, так как он управляется интерактивно
     // и его структура (массив строк) отличается от простых полей
 ];

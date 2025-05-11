@@ -123,11 +123,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const mapName = newMapNameInput.value.trim();
         if (mapName) {
             if (!maps[mapName]) {
-                maps[mapName] = { hexes: {}, settings: {} }; currentMapName = mapName; 
-                saveMapsToLocalStorage();   
-                renderMapList(); selectMap(mapName); closeCreateMapModal();
-            } else { alert("Карта с таким именем уже существует!"); newMapNameInput.select(); }
-        } else { alert("Имя карты не может быть пустым."); newMapNameInput.focus(); }
+                // Создаем новую карту
+                maps[mapName] = {
+                    hexes: {}, // Начинаем с пустых гексов
+                    settings: {} // Можно добавить дефолтные настройки карты, если они есть
+                };
+                currentMapName = mapName;
+
+                // --- Добавляем стартовый гексагон ---
+                const startHexKey = "0,0"; // Q=0, R=0
+                const startHexProperties = getDefaultHexProperties(); // Получаем свойства по умолчанию
+                startHexProperties.Title = "Start"; // Устанавливаем специальное имя
+
+                maps[currentMapName].hexes[startHexKey] = {
+                    Q: 0,
+                    R: 0,
+                    properties: startHexProperties
+                };
+                // --- Конец добавления стартового гексагона ---
+
+                // После добавления стартового гексагона, его можно сразу сделать выделенным
+                selectedHexKey = startHexKey;
+
+                saveMapsToLocalStorage();
+                renderMapList();
+                selectMap(mapName); // Эта функция уже вызовет renderCurrentMap и renderSettingsPanel
+                closeCreateMapModal();
+
+            } else {
+                alert("Карта с таким именем уже существует!");
+                newMapNameInput.select();
+            }
+        } else {
+            alert("Имя карты не может быть пустым.");
+            newMapNameInput.focus();
+        }
     }
     
     function startOpacityAnimation(hexKey, targetOpacity) { if (!currentMapName || !maps[currentMapName] || !maps[currentMapName].hexes[hexKey]) return; const hexState = opacityAnimStore[hexKey] || { current: 1.0, target: 1.0, startTime: 0, initial: 1.0 }; if (hexState.target === targetOpacity && Math.abs(hexState.current - targetOpacity) < 0.01) return; hexState.target = targetOpacity; hexState.startTime = performance.now(); hexState.initial = hexState.current; opacityAnimStore[hexKey] = hexState; if (!opacityAnimationId) opacityAnimationId = requestAnimationFrame(animateOpacities); }
@@ -423,10 +453,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentMapName || !maps[currentMapName] || !canvas.getContext) {
             if (canvas.getContext) ctx.clearRect(0, 0, canvas.width, canvas.height); return;
         }
-        ctx.clearRect(0, 0, canvas.width, canvas.height); const mapData = maps[currentMapName];
-        ctx.save(); ctx.translate(cameraOffset.x, cameraOffset.y); ctx.fillStyle = dotColor;
-        const worldViewLeft = -cameraOffset.x; const worldViewTop = -cameraOffset.y;
-        const worldViewRight = canvas.width - cameraOffset.x; const worldViewBottom = canvas.height - cameraOffset.y;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const mapData = maps[currentMapName];
+        ctx.save(); ctx.translate(cameraOffset.x, cameraOffset.y);
+        ctx.fillStyle = dotColor;
+        const worldViewLeft = -cameraOffset.x;
+        const worldViewTop = -cameraOffset.y;
+        const worldViewRight = canvas.width - cameraOffset.x;
+        const worldViewBottom = canvas.height - cameraOffset.y;
         const startX = Math.floor(worldViewLeft / dotSpacing) * dotSpacing;
         const startY = Math.floor(worldViewTop / dotSpacing) * dotSpacing;
         for (let x = startX; x < worldViewRight; x += dotSpacing) {
@@ -438,16 +472,32 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.save(); ctx.translate(cameraOffset.x, cameraOffset.y);
         Object.entries(mapData.hexes).forEach(([key, hexData]) => {
             const pixelCoords = HexMath.hexToPixel(hexData.Q, hexData.R, hexagonSize);
-            drawHexagon(pixelCoords.x, pixelCoords.y, hexagonSize, hexData.properties.Title || "", key === selectedHexKey, false, key);
+            // --- Изменение здесь: передаем isCtrlPressed ---
+            drawHexagon(pixelCoords.x, pixelCoords.y, hexagonSize, hexData.properties.Title || "", key === selectedHexKey, false, key, isCtrlPressed);
             if (isCtrlPressed && linkingHexFromKey === key) {
-                ctx.beginPath(); ctx.arc(pixelCoords.x, pixelCoords.y, 5, 0, 2 * Math.PI); ctx.fillStyle = 'yellow'; ctx.fill();
+                ctx.beginPath();
+                ctx.arc(pixelCoords.x, pixelCoords.y, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = 'yellow';
+                ctx.fill();
             }
         });
-        if (mouseHexKey && !mapData.hexes[mouseHexKey] && !hoveredHexKeyForEffects) { 
-            const [mq, mr] = mouseHexKey.split(',').map(Number); const neighbors = HexMath.getNeighbors(mq, mr);
+        if (mouseHexKey && !mapData.hexes[mouseHexKey] && !hoveredHexKeyForEffects) {
+            const [mq, mr] = mouseHexKey.split(',').map(Number);
+            const neighbors = HexMath.getNeighbors(mq, mr);
             let isAdjacentToExisting = Object.keys(mapData.hexes).length === 0;
-            if (!isAdjacentToExisting) { for (const neighbor of neighbors) { if (mapData.hexes[`${neighbor.q},${neighbor.r}`]) { isAdjacentToExisting = true; break; } } }
-            if (isAdjacentToExisting) { const pixelCoords = HexMath.hexToPixel(mq, mr, hexagonSize); drawHexagon(pixelCoords.x, pixelCoords.y, hexagonSize, "", false, true, mouseHexKey); }
+            if (!isAdjacentToExisting) {
+                for (const neighbor of neighbors) {
+                    if (mapData.hexes[`${neighbor.q},${neighbor.r}`]) {
+                        isAdjacentToExisting = true;
+                        break;
+                    }
+                }
+            }
+            if (isAdjacentToExisting) {
+                const pixelCoords = HexMath.hexToPixel(mq, mr, hexagonSize);
+                // --- Изменение здесь: передаем isCtrlPressed (хотя текст и так пустой для плейсхолдера) ---
+                drawHexagon(pixelCoords.x, pixelCoords.y, hexagonSize, "", false, true, mouseHexKey, isCtrlPressed);
+            }
         }
         if (isCtrlPressed) {
             Object.values(mapData.hexes).forEach(fromHex => {
@@ -510,28 +560,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function drawHexagon(centerX, centerY, size, text, isSelected, isPlaceholder = false, hexKey) {
+    function drawHexagon(centerX, centerY, size, text, isSelected, isPlaceholder = false, hexKey, isCtrlKeyActive = false) { // Добавлен isCtrlKeyActive
         const corners = HexMath.getHexCorners(centerX, centerY, size);
-        ctx.beginPath(); corners.forEach((corner, i) => { if (i === 0) ctx.moveTo(corner.x, corner.y); else ctx.lineTo(corner.x, corner.y); }); ctx.closePath();
+        ctx.beginPath();
+        corners.forEach((corner, i) => {
+            if (i === 0) ctx.moveTo(corner.x, corner.y);
+            else ctx.lineTo(corner.x, corner.y);
+        });
+        ctx.closePath();
+
         ctx.lineWidth = isSelected ? 2 : 1;
         let baseFillStyle = '#555555';
-        if (isSelected) baseFillStyle = '#77aaff'; else if (isPlaceholder) baseFillStyle = 'rgba(120, 120, 120, 0.3)';
+        if (isSelected) baseFillStyle = '#77aaff';
+        else if (isPlaceholder) baseFillStyle = 'rgba(120, 120, 120, 0.3)';
+
         let currentOpacity = 1.0;
-        if (!isPlaceholder && opacityAnimStore[hexKey]) currentOpacity = opacityAnimStore[hexKey].current; else if (isPlaceholder) currentOpacity = 0.3;
+        if (!isPlaceholder && opacityAnimStore[hexKey]) {
+            currentOpacity = opacityAnimStore[hexKey].current;
+        } else if (isPlaceholder) {
+            currentOpacity = 0.3;
+        }
+
         if (baseFillStyle.startsWith('#') && !isPlaceholder) {
-            const r = parseInt(baseFillStyle.slice(1, 3), 16); const g = parseInt(baseFillStyle.slice(3, 5), 16); const b = parseInt(baseFillStyle.slice(5, 7), 16);
+            const r = parseInt(baseFillStyle.slice(1, 3), 16);
+            const g = parseInt(baseFillStyle.slice(3, 5), 16);
+            const b = parseInt(baseFillStyle.slice(5, 7), 16);
             ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${currentOpacity})`;
-        } else ctx.fillStyle = baseFillStyle; 
+        } else {
+            ctx.fillStyle = baseFillStyle;
+        }
         ctx.strokeStyle = isSelected ? '#ffffff' : (isPlaceholder ? '#777777' : '#888888');
-        ctx.fill(); ctx.stroke();
-        if (text && !isPlaceholder) {
-            ctx.fillStyle = '#dddddd'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fill();
+        ctx.stroke();
+
+        // --- Изменение здесь: проверяем isCtrlKeyActive ---
+        if (text && !isPlaceholder && !isCtrlKeyActive) { // Не рисуем текст, если Ctrl зажат
+            ctx.fillStyle = '#dddddd';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             const maxWidth = size * 1.5;
-            if (ctx.measureText(text).width > maxWidth && text.length > 3) {
-                 let shortText = text;
-                 if (text.length > 15) shortText = text.substring(0,12) + "..."; else if (text.length > 10) shortText = text.substring(0,8) + "..."; else if (text.length > 7) shortText = text.substring(0,5) + "...";
-                 text = shortText;
-            } ctx.fillText(text, centerX, centerY);
+            let originalText = text; // Сохраним оригинальный текст для измерения
+            if (ctx.measureText(originalText).width > maxWidth && originalText.length > 3) {
+                let shortText = originalText;
+                if (originalText.length > 15) shortText = originalText.substring(0, 12) + "...";
+                else if (originalText.length > 10) shortText = originalText.substring(0, 8) + "...";
+                else if (originalText.length > 7) shortText = originalText.substring(0, 5) + "...";
+                text = shortText; // Используем укороченный текст для отрисовки
+            }
+            ctx.fillText(text, centerX, centerY);
         }
     }
 
