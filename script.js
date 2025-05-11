@@ -293,7 +293,131 @@ document.addEventListener('DOMContentLoaded', () => {
     function getHexKeyFromScreenCoords(screenX, screenY) { const worldCoords = screenToWorldCoords(screenX, screenY); const coords = HexMath.pixelToHex(worldCoords.x, worldCoords.y, hexagonSize); return `${coords.q},${coords.r}`; }
     function handleMouseMove(event) { if (!currentMapName) return; const rect = canvas.getBoundingClientRect(); const mouseX = event.clientX - rect.left; const mouseY = event.clientY - rect.top; currentMousePosCanvas = { x: mouseX, y: mouseY }; if (isPanning) { cameraOffset.x = event.clientX - panStart.x; cameraOffset.y = event.clientY - panStart.y; if (!activeLabel.animationId && !opacityAnimationId) renderCurrentMap(); return; } const newMouseHexKeyUnderCursor = getHexKeyFromScreenCoords(mouseX, mouseY); mouseHexKey = newMouseHexKeyUnderCursor; let newHoveredForKey = null; if (newMouseHexKeyUnderCursor && maps[currentMapName].hexes[newMouseHexKeyUnderCursor]) newHoveredForKey = newMouseHexKeyUnderCursor; if (hoveredHexKeyForEffects !== newHoveredForKey) { if (hoveredHexKeyForEffects && maps[currentMapName] && maps[currentMapName].hexes[hoveredHexKeyForEffects]) { startOpacityAnimation(hoveredHexKeyForEffects, 1.0); clearLabelAnimation(); } if (newHoveredForKey) { startOpacityAnimation(newHoveredForKey, 0.5); startLabelAnimation(newHoveredForKey); } hoveredHexKeyForEffects = newHoveredForKey; } if ( (isCtrlPressed && linkingHexFromKey) || (newMouseHexKeyUnderCursor !== hoveredHexKeyForEffects) ) { if (!activeLabel.animationId && !opacityAnimationId) renderCurrentMap(); } }
     function handleMouseLeave() { mouseHexKey = null; if (hoveredHexKeyForEffects && maps[currentMapName] && maps[currentMapName].hexes[hoveredHexKeyForEffects]) startOpacityAnimation(hoveredHexKeyForEffects, 1.0); clearLabelAnimation(); hoveredHexKeyForEffects = null; if (isPanning) { isPanning = false; canvas.style.cursor = currentMapName ? 'grab' : 'default'; } }
-    function handleCanvasClick(event) { if (!currentMapName || !maps[currentMapName] || isPanning) return; const rect = canvas.getBoundingClientRect(); const screenX = event.clientX - rect.left; const screenY = event.clientY - rect.top; const clickedKey = getHexKeyFromScreenCoords(screenX, screenY); const mapData = maps[currentMapName]; let dataChanged = false; if (isCtrlPressed) { if (mapData.hexes[clickedKey]) { if (!linkingHexFromKey) { linkingHexFromKey = clickedKey; selectedHexKey = clickedKey; } else { if (linkingHexFromKey !== clickedKey) { const fromHexData = mapData.hexes[linkingHexFromKey]; const toHexData = mapData.hexes[clickedKey]; if (!fromHexData.properties.NextHex) fromHexData.properties.NextHex = []; const targetHex_QR_Key = `${toHexData.Q},${toHexData.R}`; if (!fromHexData.properties.NextHex.includes(targetHex_QR_Key)) { fromHexData.properties.NextHex.push(targetHex_QR_Key); dataChanged = true; } selectedHexKey = clickedKey; } else { selectedHexKey = clickedKey; } linkingHexFromKey = null; } } else { linkingHexFromKey = null; } } else { linkingHexFromKey = null; if (mapData.hexes[clickedKey]) { selectedHexKey = clickedKey; } else { const [q, r] = clickedKey.split(',').map(Number); const neighbors = HexMath.getNeighbors(q, r); let isAdjacent = Object.keys(mapData.hexes).length === 0; if (!isAdjacent) { for (const neighbor of neighbors) { if (mapData.hexes[`${neighbor.q},${neighbor.r}`]) { isAdjacent = true; break; } } } if (isAdjacent) { const newHexData = { Q: q, R: r, properties: getDefaultHexProperties() }; if (Object.keys(mapData.hexes).length === 0) newHexData.properties.Title = "Start"; mapData.hexes[clickedKey] = newHexData; selectedHexKey = clickedKey; dataChanged = true; } } } if (dataChanged) saveMapsToLocalStorage(); renderCurrentMap(); renderSettingsPanel(); }
+    
+    function handleCanvasClick(event) {
+        if (!currentMapName || !maps[currentMapName] || isPanning) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const screenX = event.clientX - rect.left;
+        const screenY = event.clientY - rect.top;
+        const clickedKey = getHexKeyFromScreenCoords(screenX, screenY); // e.g., "q,r"
+        const mapData = maps[currentMapName];
+        let dataChangedInOriginalLogic = false; // Переименовал для ясности
+
+        // --- Логика для Alt+Click (Удаление гексагона) ---
+        if (event.altKey) {
+            if (mapData.hexes[clickedKey]) {
+                const hexToDelete = mapData.hexes[clickedKey];
+                const hexDisplayName = hexToDelete.properties.Title || `Hex (${hexToDelete.Q},${hexToDelete.R})`;
+
+                if (confirm(`Are you sure you want to delete hexagon "${hexDisplayName}"? This action cannot be undone.`)) {
+                    // 1. Удалить ссылки на этот гексагон из других гексагонов (из их NextHex)
+                    const deletedHex_QR_Key = clickedKey;
+                    Object.values(mapData.hexes).forEach(hex => {
+                        if (hex.properties.NextHex && hex.properties.NextHex.includes(deletedHex_QR_Key)) {
+                            hex.properties.NextHex = hex.properties.NextHex.filter(key => key !== deletedHex_QR_Key);
+                            // Это изменение данных, которое также нужно сохранить
+                        }
+                    });
+
+                    // 2. Удалить сам гексагон
+                    delete mapData.hexes[clickedKey];
+                    console.log(`Hexagon ${clickedKey} ("${hexDisplayName}") deleted.`);
+
+                    // 3. Обновить состояние, если удаленный гексагон был активным/выбранным/и т.д.
+                    if (selectedHexKey === clickedKey) {
+                        selectedHexKey = null;
+                    }
+                    if (hoveredHexKeyForEffects === clickedKey) {
+                        // Очистить анимацию метки, если она была для этого гекса
+                        if (activeLabel.hexKey === clickedKey) {
+                            clearLabelAnimation();
+                        }
+                        // Удалить из хранилища анимации прозрачности
+                        if (opacityAnimStore[clickedKey]) {
+                            delete opacityAnimStore[clickedKey];
+                        }
+                        hoveredHexKeyForEffects = null; // Сбросить состояние наведения
+                    }
+                    // Если метка была активна для удаленного гекса, но он не был под курсором в момент удаления
+                    if (activeLabel.hexKey === clickedKey && hoveredHexKeyForEffects !== clickedKey) {
+                        clearLabelAnimation();
+                    }
+                    if (linkingHexFromKey === clickedKey) {
+                        linkingHexFromKey = null; // Отменить связывание, если начиналось с этого гекса
+                    }
+
+                    // Сохранить изменения и перерисовать
+                    saveMapsToLocalStorage();
+                    renderCurrentMap();
+                    renderSettingsPanel(); // Обновит панель настроек (покажет плейсхолдер, если гекс был выбран)
+                }
+            }
+            // Важно: после обработки Alt+клика (или попытки) завершаем выполнение,
+            // чтобы не сработала остальная логика клика (создание/выбор).
+            return;
+        }
+
+        // --- Существующая логика для Ctrl+Click и обычного клика ---
+        // (Этот блок выполнится, только если event.altKey === false)
+
+        if (isCtrlPressed) {
+            if (mapData.hexes[clickedKey]) { // Ctrl+клик на существующий гекс
+                if (!linkingHexFromKey) {
+                    linkingHexFromKey = clickedKey;
+                    selectedHexKey = clickedKey; // Выбираем гекс, с которого начинаем связь
+                } else { // Второй Ctrl+клик для завершения связи
+                    if (linkingHexFromKey !== clickedKey) { // Связываем с другим гексом
+                        const fromHexData = mapData.hexes[linkingHexFromKey];
+                        const toHexData = mapData.hexes[clickedKey];
+                        if (!fromHexData.properties.NextHex) fromHexData.properties.NextHex = [];
+                        const targetHex_QR_Key = `${toHexData.Q},${toHexData.R}`;
+                        if (!fromHexData.properties.NextHex.includes(targetHex_QR_Key)) {
+                            fromHexData.properties.NextHex.push(targetHex_QR_Key);
+                            dataChangedInOriginalLogic = true;
+                        }
+                        selectedHexKey = clickedKey; // Выбираем целевой гекс
+                    } else { // Ctrl+клик на тот же самый гекс (завершаем/отменяем связывание)
+                        selectedHexKey = clickedKey; // Просто убеждаемся, что он выбран
+                    }
+                    linkingHexFromKey = null; // Завершаем операцию связывания
+                }
+            } else { // Ctrl+клик на пустое место
+                linkingHexFromKey = null; // Отменяем связывание
+            }
+        } else { // Обычный клик (не Alt, не Ctrl)
+            linkingHexFromKey = null; // Отменяем любое ожидающее связывание
+
+            if (mapData.hexes[clickedKey]) { // Клик на существующий гекс
+                selectedHexKey = clickedKey;
+            } else { // Клик на пустое место - попытка создать новый гекс
+                const [q, r] = clickedKey.split(',').map(Number);
+                const neighbors = HexMath.getNeighbors(q, r);
+                let isAdjacent = Object.keys(mapData.hexes).length === 0; // Первый гекс можно ставить где угодно
+                if (!isAdjacent) {
+                    for (const neighbor of neighbors) {
+                        if (mapData.hexes[`${neighbor.q},${neighbor.r}`]) {
+                            isAdjacent = true;
+                            break;
+                        }
+                    }
+                }
+                if (isAdjacent) {
+                    const newHexData = { Q: q, R: r, properties: getDefaultHexProperties() };
+                    if (Object.keys(mapData.hexes).length === 0) newHexData.properties.Title = "Start";
+                    mapData.hexes[clickedKey] = newHexData;
+                    selectedHexKey = clickedKey;
+                    dataChangedInOriginalLogic = true;
+                }
+            }
+        }
+
+        if (dataChangedInOriginalLogic) {
+            saveMapsToLocalStorage();
+        }
+        renderCurrentMap(); // Перерисовываем карту после любого клика, который мог изменить состояние
+        renderSettingsPanel(); // Перерисовываем панель настроек
+    }
 
     function renderCurrentMap() {
         if (!currentMapName || !maps[currentMapName] || !canvas.getContext) {
